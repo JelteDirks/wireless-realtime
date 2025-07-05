@@ -1,5 +1,7 @@
 const VGA_BUFFER_ADDR: u32 = 0xb8000;
 
+use crate::util::delay;
+
 // NOTE: https://www.fountainware.com/EXPL/vga_color_palettes.htm
 
 #[allow(dead_code)]
@@ -25,7 +27,8 @@ pub enum VGAColorCode {
     BrightWhite = 0x0F,
 }
 
-#[repr(C)]
+#[derive(Clone, Copy)]
+#[repr(C, packed)]
 pub struct VGACharacter {
     char_code: u8,
     color_code: VGAColorCode,
@@ -52,43 +55,76 @@ impl From<u8> for VGACharacter {
 
 pub struct VGAWriter {
     base: &'static mut [VGACharacter],
-    cols: u8,
-    rows: u8,
-    row_cursor: u8,
-    col_cursor: u8,
+    cols: usize,
+    rows: usize,
+    row_cursor: usize,
+    col_cursor: usize,
 }
 
 impl VGAWriter {
     pub fn new() -> Self {
-        let length = 80 * 25;
+        let cols: usize = 80;
+        let rows: usize = 25;
+        let length: usize = cols * rows;
         let start = VGA_BUFFER_ADDR as *mut VGACharacter;
         let buf = core::ptr::slice_from_raw_parts_mut(start, length);
 
         VGAWriter {
             base: unsafe { &mut *(buf) },
-            cols: 80,
-            rows: 25,
+            cols,
+            rows,
             row_cursor: 0,
             col_cursor: 0,
         }
     }
 
+    fn move_lines_up(&mut self) {
+        let n = self.rows * self.cols;
+        for i in 0..n - self.cols {
+            self.base[i] = self.base[i + self.cols];
+        }
+
+        for i in self.cols * (self.rows - 1)..(self.cols * self.rows) {
+            self.base[i] = b' '.into();
+        }
+    }
+
+    pub fn new_line(&mut self) {
+        self.row_cursor += 1;
+        self.col_cursor = 0;
+
+        if self.row_cursor == self.rows {
+            self.move_lines_up();
+            self.row_cursor -= 1;
+        }
+    }
+
+    pub fn write_byte(&mut self, byte: u8) {
+        match byte {
+            b'\n' => self.new_line(),
+            byte => {
+                self.base[self.offset()] = byte.into();
+                self.advance_cursor();
+            }
+        }
+    }
+
     pub fn write_bytes(&mut self, bytes: &[u8]) {
-        let offset: usize = (self.row_cursor * self.cols + self.col_cursor).into();
-        for (i, &b) in bytes.iter().enumerate() {
+        bytes.iter().for_each(|&b| {
+            delay();
+            self.write_byte(b)
+        });
+    }
+
+    fn offset(&self) -> usize {
+        self.row_cursor * self.cols + self.col_cursor
+    }
+
+    fn advance_cursor(&mut self) {
+        if self.col_cursor == self.cols - 1 {
+            self.new_line();
+        } else {
             self.col_cursor += 1;
-
-            if self.col_cursor == self.cols {
-                self.col_cursor = 0;
-                self.row_cursor += 1;
-            }
-
-            if self.row_cursor == self.rows {
-                // TODO: move lines up
-                self.row_cursor = 0; // wrap around for now
-            }
-
-            self.base[offset + i] = b.into();
         }
     }
 }
