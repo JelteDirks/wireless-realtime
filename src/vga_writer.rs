@@ -1,9 +1,30 @@
 const VGA_BUFFER_ADDR: u32 = 0xb8000;
 
-use crate::util::delay;
+use lazy_static::lazy_static;
+use spin::Mutex;
+
+lazy_static! {
+    pub static ref WRITER: Mutex<VGAWriter> = Mutex::new(VGAWriter::new());
+}
+
+#[macro_export]
+macro_rules! print { /* NOTE: copied from existing impl */
+    ($($arg:tt)*) => ($crate::vga_writer::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println { /* NOTE: copied from existing impl */
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    WRITER.lock().write_fmt(args).unwrap();
+}
 
 // NOTE: https://www.fountainware.com/EXPL/vga_color_palettes.htm
-
 #[allow(dead_code)]
 #[derive(Default, Clone, Copy, Eq, PartialEq)]
 #[repr(u8)]
@@ -52,6 +73,13 @@ pub struct VGAWriter {
     rows: usize,
     row_cursor: usize,
     col_cursor: usize,
+}
+
+impl core::fmt::Write for VGAWriter {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.write_str(s);
+        Ok(())
+    }
 }
 
 impl VGAWriter {
