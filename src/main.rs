@@ -10,20 +10,12 @@ use crate::util::delay;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
-
     println!("deeznutsalskdjflksdjf {}", 10);
-
-    let mut c = 0;
-    loop {
-        c += 1;
-        for i in 0..100 {
-            delay();
-        }
-        println!("looping {}", c);
-    }
+    panic!();
 }
 
 #[panic_handler]
-fn handle_panic(_info: &PanicInfo) -> ! {
+fn handle_panic(info: &PanicInfo) -> ! {
+    println!("{}", info);
     loop {}
 }
