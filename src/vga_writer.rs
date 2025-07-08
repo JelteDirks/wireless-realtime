@@ -34,20 +34,13 @@ pub struct VGACharacter {
     color_code: VGAColorCode,
 }
 
-impl VGACharacter {
-    fn new(byte: u8, color: VGAColorCode) -> Self {
-        VGACharacter {
-            char_code: byte,
-            color_code: color,
-        }
-    }
-}
-
 impl From<u8> for VGACharacter {
     fn from(val: u8) -> Self {
-        // TODO: some logic to keep the value within correct vga boundaries
         VGACharacter {
-            char_code: val,
+            char_code: match val {
+                0x20..0x7e => val,
+                _ => 0xfe,
+            },
             color_code: VGAColorCode::default(),
         }
     }
@@ -102,7 +95,8 @@ impl VGAWriter {
     pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
-            byte => {
+            _ => {
+                // NOTE: could maybe be optimized away?
                 self.base[self.offset()] = byte.into();
                 self.advance_cursor();
             }
@@ -110,10 +104,15 @@ impl VGAWriter {
     }
 
     pub fn write_bytes(&mut self, bytes: &[u8]) {
-        bytes.iter().for_each(|&b| {
-            delay();
-            self.write_byte(b)
-        });
+        for &b in bytes.iter() {
+            self.write_byte(b);
+        }
+    }
+
+    pub fn write_str(&mut self, s: &str) {
+        for b in s.bytes() {
+            self.write_byte(b);
+        }
     }
 
     fn offset(&self) -> usize {
